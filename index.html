@@ -198,134 +198,61 @@
     }
 
     function createProceduralTextures() {
-      const textureSize = 512; // Higher resolution texture
-      
-      // Create canvas for each texture type
+      // Create simple colored textures for now to reduce complexity
       cardData.forEach((data, index) => {
+        const textureSize = 256;
         const canvas = document.createElement('canvas');
         canvas.width = textureSize;
         canvas.height = textureSize;
         const ctx = canvas.getContext('2d');
         
-        // Create gradient background
+        // Simple solid color background for now
         const color = new THREE.Color(data.color);
         const r = Math.floor(color.r * 255);
         const g = Math.floor(color.g * 255);
         const b = Math.floor(color.b * 255);
-        
-        // Create a gradient for more visual appeal
-        const gradient = ctx.createLinearGradient(0, 0, textureSize, textureSize);
-        gradient.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
-        gradient.addColorStop(1, `rgb(${Math.min(r+40, 255)}, ${Math.min(g+40, 255)}, ${Math.min(b+40, 255)})`);
-        ctx.fillStyle = gradient;
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
         ctx.fillRect(0, 0, textureSize, textureSize);
-        
-        // Add pattern based on type
-        const darkColor = `rgba(${Math.floor(r*0.7)}, ${Math.floor(g*0.7)}, ${Math.floor(b*0.7)}, 0.7)`;
-        ctx.fillStyle = darkColor;
-        ctx.strokeStyle = darkColor;
-        
-        switch(data.pattern) {
-          case "wavy":
-            // Draw wavy pattern
-            ctx.beginPath();
-            for(let y = 0; y < textureSize; y += 20) {
-              for(let x = 0; x < textureSize; x += 5) {
-                const amplitude = 8;
-                const frequency = 0.05;
-                const yOffset = Math.sin(x * frequency) * amplitude;
-                ctx.rect(x, y + yOffset, 3, 3);
-              }
-            }
-            ctx.fill();
-            break;
-            
-          case "dotted":
-            // Draw dot pattern
-            for(let y = 10; y < textureSize; y += 25) {
-              for(let x = 10; x < textureSize; x += 25) {
-                ctx.beginPath();
-                ctx.arc(x, y, 5, 0, Math.PI * 2);
-                ctx.fill();
-              }
-            }
-            break;
-            
-          case "linear":
-            // Draw linear pattern
-            for(let y = 15; y < textureSize; y += 30) {
-              ctx.beginPath();
-              ctx.lineWidth = 5;
-              ctx.moveTo(0, y);
-              ctx.lineTo(textureSize, y);
-              ctx.stroke();
-            }
-            break;
-            
-          case "circular":
-            // Draw circular pattern
-            const centerX = textureSize / 2;
-            const centerY = textureSize / 2;
-            for(let radius = 25; radius < textureSize/1.5; radius += 35) {
-              ctx.beginPath();
-              ctx.lineWidth = 4;
-              ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-              ctx.stroke();
-            }
-            break;
-        }
-        
-        // Add a subtle border
-        ctx.strokeStyle = `rgba(255, 255, 255, 0.3)`;
-        ctx.lineWidth = 10;
-        ctx.strokeRect(5, 5, textureSize-10, textureSize-10);
         
         // Create texture from canvas
         const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
         cardTextures[index] = texture;
       });
       
-      console.log("Enhanced textures created successfully");
+      // Log success message for debugging
+      console.log("Textures created successfully");
     }
 
     function createCards() {
       const cardWidth = 0.2;
       const cardHeight = 0.3;
-      const cardDepth = 0.01; // Thinner cards look more elegant
+      const cardDepth = 0.02;
       
-      // Create cards in a better arranged semicircle in front of the camera
+      // Create cards in a semicircle in front of the camera
       for(let i = 0; i < cardData.length; i++) {
-        // Use rounded rectangle geometry for cards (simulated with chamfered edges)
-        const geometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth, 1, 1, 1);
-        geometry.translate(0, 0, cardDepth/2); // Move pivot to back face for better rotation
+        // Card geometry
+        const geometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth);
         
-        // Enhanced materials
-        const material = new THREE.MeshPhysicalMaterial({
+        // Card material with procedural texture
+        const material = new THREE.MeshStandardMaterial({
           map: cardTextures[i],
           color: cardData[i].color,
-          metalness: 0.1,
-          roughness: 0.4,
-          clearcoat: 0.5, // Add glossy finish
-          clearcoatRoughness: 0.2,
-          side: THREE.DoubleSide
+          metalness: 0.3,
+          roughness: 0.6,
         });
         
         // Create card mesh
         const card = new THREE.Mesh(geometry, material);
         
-        // Position in semi-circle with better spacing and angle
-        const totalAngle = Math.PI * 0.5; // 90 degrees arrangement
-        const angle = -totalAngle/2 + (i / (cardData.length-1)) * totalAngle;
-        const radius = 0.7; // Slightly farther away
+        // Position in semi-circle
+        const angle = (i - (cardData.length - 1) / 2) * 0.25;
+        const radius = 0.65;
         card.position.x = Math.sin(angle) * radius;
-        card.position.y = 0.05 + (i % 2) * 0.02; // Slight height variation
+        card.position.y = 0;
         card.position.z = -Math.cos(angle) * radius - 0.3;
         
-        // Initially face toward the camera center with slight offset
-        card.lookAt(0, card.position.y, 0);
-        card.rotation.y += (i - (cardData.length-1)/2) * 0.08; // Slight angle variation
+        // Initially face the camera
+        card.lookAt(0, 0, 0);
         
         // Store original properties for animations
         card.userData = {
@@ -333,170 +260,61 @@
           originalRotation: card.rotation.clone(),
           originalScale: card.scale.clone(),
           index: i,
-          hovered: false,
-          selected: false,
-          lastDistance: Infinity
+          hovered: false
         };
         
         // Add to scene and cards array
         scene.add(card);
         cards.push(card);
         
-        // Add text if font is loaded
-        if (font) {
-          addCardText(card, cardData[i]);
-        } else {
-          // Retry when font loads
-          setTimeout(() => {
-            if (font) addCardText(card, cardData[i]);
-          }, 1000);
-        }
-        
-        // Add subtle particle effect behind each card
-        addCardParticles(card, cardData[i].color);
+        // Temporarily commenting out text addition to simplify
+        // We'll focus on getting the cards working first
+        // if (font) {
+        //   addCardText(card, cardData[i]);
+        // } else {
+        //   setTimeout(() => {
+        //     if (font) addCardText(card, cardData[i]);
+        //   }, 1000);
+        // }
       }
       
       updateStatus('Move your controller near a card to interact');
     }
     
-    function addCardParticles(card, color) {
-      const particleCount = 8;
-      const particleSize = 0.005;
-      const particleGeometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(particleCount * 3);
+    // Temporarily commenting out text function to simplify initial setup
+    // function addCardText(card, data) {
+    //   // Title text
+    //   const titleGeometry = new TextGeometry(data.title, {
+    //     font: font,
+    //     size: 0.03,
+    //     height: 0.005
+    //   });
+    //   titleGeometry.computeBoundingBox();
+    //   const titleWidth = titleGeometry.boundingBox.max.x - titleGeometry.boundingBox.min.x;
       
-      // Distribute particles behind the card
-      for (let i = 0; i < particleCount; i++) {
-        const i3 = i * 3;
-        positions[i3] = (Math.random() - 0.5) * 0.15;
-        positions[i3 + 1] = (Math.random() - 0.5) * 0.15;
-        positions[i3 + 2] = -0.02 - Math.random() * 0.03;
-      }
+    //   const titleMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+    //   const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
       
-      particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    //   // Center and position the title on top of the card
+    //   titleMesh.position.set(-titleWidth/2, 0.08, 0.011);
+    //   card.add(titleMesh);
       
-      // Create glowing particle material
-      const particleMaterial = new THREE.PointsMaterial({
-        color: color,
-        size: particleSize,
-        transparent: true,
-        opacity: 0.7,
-        blending: THREE.AdditiveBlending
-      });
+    //   // Description text
+    //   const descGeometry = new TextGeometry(data.description, {
+    //     font: font,
+    //     size: 0.015,
+    //     height: 0.002
+    //   });
+    //   descGeometry.computeBoundingBox();
+    //   const descWidth = descGeometry.boundingBox.max.x - descGeometry.boundingBox.min.x;
       
-      const particles = new THREE.Points(particleGeometry, particleMaterial);
-      card.add(particles);
+    //   const descMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+    //   const descMesh = new THREE.Mesh(descGeometry, descMaterial);
       
-      // Store for animation
-      particles.userData = {
-        initialPositions: positions.slice()
-      };
-    }
-    
-    function addCardText(card, data) {
-      // Create a text container for better organization
-      const textContainer = new THREE.Object3D();
-      card.add(textContainer);
-      textContainer.position.set(0, 0, 0.011); // Just in front of the card
-      
-      // Title text with nicer material
-      const titleGeometry = new TextGeometry(data.title, {
-        font: font,
-        size: 0.035, // Slightly larger
-        height: 0.004,
-        curveSegments: 12, // Higher quality
-        bevelEnabled: true,
-        bevelThickness: 0.001,
-        bevelSize: 0.001,
-        bevelSegments: 3
-      });
-      titleGeometry.computeBoundingBox();
-      const titleWidth = titleGeometry.boundingBox.max.x - titleGeometry.boundingBox.min.x;
-      
-      // Title material with slight emissive glow
-      const titleMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xFFFFFF,
-        emissive: 0xFFFFFF,
-        emissiveIntensity: 0.2,
-        metalness: 0.5,
-        roughness: 0.2
-      });
-      const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
-      
-      // Center the title on top of the card
-      titleMesh.position.set(-titleWidth/2, 0.08, 0);
-      textContainer.add(titleMesh);
-      
-      // Description text
-      const descGeometry = new TextGeometry(data.description, {
-        font: font,
-        size: 0.018,
-        height: 0.002,
-        curveSegments: 8,
-        bevelEnabled: false
-      });
-      descGeometry.computeBoundingBox();
-      const descWidth = descGeometry.boundingBox.max.x - descGeometry.boundingBox.min.x;
-      
-      const descMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xFFFFFF,
-        emissive: 0xFFFFFF,
-        emissiveIntensity: 0.1
-      });
-      const descMesh = new THREE.Mesh(descGeometry, descMaterial);
-      
-      // Center the description below the title
-      descMesh.position.set(-descWidth/2, 0.03, 0);
-      textContainer.add(descMesh);
-      
-      // Add a small icon representing the category
-      addCardIcon(textContainer, data);
-      
-      return textContainer;
-    }
-    
-    function addCardIcon(container, data) {
-      let iconGeometry;
-      
-      // Create different icon shapes based on category
-      switch(data.pattern) {
-        case "wavy":
-          // Explore icon - sphere
-          iconGeometry = new THREE.SphereGeometry(0.015, 12, 12);
-          break;
-        case "dotted": 
-          // Create icon - cube
-          iconGeometry = new THREE.BoxGeometry(0.025, 0.025, 0.025);
-          break;
-        case "linear":
-          // Learn icon - cylinder
-          iconGeometry = new THREE.CylinderGeometry(0.015, 0.015, 0.025, 12);
-          break;
-        case "circular":
-          // Connect icon - torus
-          iconGeometry = new THREE.TorusGeometry(0.015, 0.005, 8, 16);
-          break;
-      }
-      
-      const iconMaterial = new THREE.MeshStandardMaterial({
-        color: data.color,
-        emissive: data.color,
-        emissiveIntensity: 0.5,
-        metalness: 0.8,
-        roughness: 0.2
-      });
-      
-      const iconMesh = new THREE.Mesh(iconGeometry, iconMaterial);
-      iconMesh.position.set(0, -0.07, 0);
-      container.add(iconMesh);
-      
-      // Add animation data
-      iconMesh.userData = {
-        rotationSpeed: 0.02
-      };
-      
-      return iconMesh;
-    }
+    //   // Center and position the description below the title
+    //   descMesh.position.set(-descWidth/2, 0.04, 0.011);
+    //   card.add(descMesh);
+    // }
 
     function setupController(session) {
       // Create controller
@@ -506,118 +324,18 @@
         updateStatus(`Controller connected: ${xrInputSource.handedness}`);
       });
       
-      // Add select event for card selection
-      controller.addEventListener('select', onCardSelect);
-      
       scene.add(controller);
       
-      // Add a more attractive visual for the controller
-      const controllerGroup = new THREE.Group();
-      controller.add(controllerGroup);
-      
-      // Main controller body
-      const controllerGeometry = new THREE.CylinderGeometry(0.008, 0.015, 0.08, 16);
+      // Add a visual for the controller
+      const controllerGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.08, 16);
       const controllerMaterial = new THREE.MeshStandardMaterial({
         color: 0xFFFFFF,
-        roughness: 0.2,
-        metalness: 0.8,
-        emissive: 0xAAAAAA,
-        emissiveIntensity: 0.2
+        roughness: 0.3,
+        metalness: 0.5
       });
       const controllerMesh = new THREE.Mesh(controllerGeometry, controllerMaterial);
       controllerMesh.rotation.x = Math.PI / 2;
-      controllerGroup.add(controllerMesh);
-      
-      // Controller tip with emissive glow
-      const tipGeometry = new THREE.SphereGeometry(0.007, 8, 8);
-      const tipMaterial = new THREE.MeshStandardMaterial({
-        color: 0x00FFFF,
-        roughness: 0.1,
-        metalness: 0.9,
-        emissive: 0x00FFFF,
-        emissiveIntensity: 1.0
-      });
-      const tipMesh = new THREE.Mesh(tipGeometry, tipMaterial);
-      tipMesh.position.set(0, 0, -0.05); // At the end of controller
-      controllerGroup.add(tipMesh);
-      
-      // Add a point light at the controller tip for dynamic lighting
-      const controllerLight = new THREE.PointLight(0x00FFFF, 0.5, 0.2);
-      controllerLight.position.copy(tipMesh.position);
-      controllerGroup.add(controllerLight);
-      
-      // Store for animation
-      controller.userData = {
-        tipMesh: tipMesh,
-        light: controllerLight
-      };
-      
-      return controller;
-    }
-    
-    function onCardSelect(event) {
-      // Find which card is closest to controller
-      const controllerWorldPosition = new THREE.Vector3();
-      controller.getWorldPosition(controllerWorldPosition);
-      
-      let closestCard = null;
-      let closestDistance = 0.3; // Max selection distance
-      
-      cards.forEach(card => {
-        const distance = controllerWorldPosition.distanceTo(card.position);
-        if (distance < closestDistance) {
-          closestCard = card;
-          closestDistance = distance;
-        }
-      });
-      
-      if (closestCard) {
-        // Toggle selection state
-        closestCard.userData.selected = !closestCard.userData.selected;
-        
-        if (closestCard.userData.selected) {
-          // Selection effect
-          selectCard(closestCard);
-          updateStatus(`Selected: ${cardData[closestCard.userData.index].title}`);
-        } else {
-          // Deselection
-          deselectCard(closestCard);
-          updateStatus('Card deselected');
-        }
-      }
-    }
-    
-    function selectCard(card) {
-      // Move card forward
-      const forwardVector = new THREE.Vector3(0, 0, -0.1);
-      forwardVector.applyQuaternion(card.quaternion);
-      card.position.add(forwardVector);
-      
-      // Scale up
-      card.scale.set(1.2, 1.2, 1.2);
-      
-      // Enhance material
-      card.material.emissive.set(cardData[card.userData.index].color);
-      card.material.emissiveIntensity = 0.5;
-      
-      // Deselect any other selected cards
-      cards.forEach(otherCard => {
-        if (otherCard !== card && otherCard.userData.selected) {
-          otherCard.userData.selected = false;
-          deselectCard(otherCard);
-        }
-      });
-    }
-    
-    function deselectCard(card) {
-      // Return to original position
-      card.position.copy(card.userData.originalPosition);
-      
-      // Reset scale
-      card.scale.copy(card.userData.originalScale);
-      
-      // Reset material
-      card.material.emissiveIntensity = 0;
+      controller.add(controllerMesh);
     }
 
     function render(timestamp, frame) {
