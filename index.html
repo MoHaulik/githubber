@@ -120,12 +120,11 @@
       directionalLight.castShadow = true;
       scene.add(directionalLight);
 
-      // Load font for text
-      const fontLoader = new FontLoader();
-      fontLoader.load('https://unpkg.com/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json', function(loadedFont) {
-        font = loadedFont;
-        console.log("Font loaded successfully");
-      });
+      // Temporarily commenting out font loading to simplify initial setup
+      // const fontLoader = new FontLoader();
+      // fontLoader.load('https://unpkg.com/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json', function(loadedFont) {
+      //   font = loadedFont;
+      // });
 
       // Start button event
       document.getElementById('start-button').addEventListener('click', () => {
@@ -229,6 +228,7 @@
       const cardDepth = 0.02;
       
       // Create cards in a semicircle in front of the camera
+      // MODIFIED: Increased spacing between cards by using a wider angle
       for(let i = 0; i < cardData.length; i++) {
         // Card geometry
         const geometry = new THREE.BoxGeometry(cardWidth, cardHeight, cardDepth);
@@ -244,9 +244,9 @@
         // Create card mesh
         const card = new THREE.Mesh(geometry, material);
         
-        // Position in semi-circle
-        const angle = (i - (cardData.length - 1) / 2) * 0.25;
-        const radius = 0.65;
+        // MODIFIED: Increased spacing between cards by using a wider angle spread and larger radius
+        const angle = (i - (cardData.length - 1) / 2) * 0.45; // Increased from 0.25 to 0.45
+        const radius = 0.85; // Increased from 0.65 to 0.85
         card.position.x = Math.sin(angle) * radius;
         card.position.y = 0;
         card.position.z = -Math.cos(angle) * radius - 0.3;
@@ -326,7 +326,7 @@
       
       scene.add(controller);
       
-      // Add a visual for the controller
+      // Add a visual indicator for the controller with ray
       const controllerGeometry = new THREE.CylinderGeometry(0.01, 0.02, 0.08, 16);
       const controllerMaterial = new THREE.MeshStandardMaterial({
         color: 0xFFFFFF,
@@ -336,6 +336,50 @@
       const controllerMesh = new THREE.Mesh(controllerGeometry, controllerMaterial);
       controllerMesh.rotation.x = Math.PI / 2;
       controller.add(controllerMesh);
+      
+      // Add a ray pointer to help with aiming
+      const rayGeometry = new THREE.CylinderGeometry(0.002, 0.002, 2, 8);
+      rayGeometry.translate(0, -1, 0); // Position ray to point forward
+      rayGeometry.rotateX(Math.PI / 2);
+      
+      const rayMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.6
+      });
+      
+      const rayMesh = new THREE.Mesh(rayGeometry, rayMaterial);
+      controller.add(rayMesh);
+      
+      // Add controller select event for card activation
+      controller.addEventListener('select', onControllerSelect);
+    }
+    
+    function onControllerSelect() {
+      // Get current hovered card
+      let hoveredCard = null;
+      cards.forEach(card => {
+        if (card.userData.hovered) {
+          hoveredCard = card;
+        }
+      });
+      
+      // If a card is hovered, trigger its action
+      if (hoveredCard) {
+        // Visual feedback for selection
+        const originalColor = hoveredCard.material.color.clone();
+        hoveredCard.material.color.set(0xffffff);
+        
+        // Display card info
+        updateStatus(`Selected: ${cardData[hoveredCard.userData.index].title} - ${cardData[hoveredCard.userData.index].description}`);
+        
+        // Reset color after brief flash
+        setTimeout(() => {
+          if (hoveredCard && hoveredCard.material) {
+            hoveredCard.material.color.copy(originalColor);
+          }
+        }, 200);
+      }
     }
 
     function render(timestamp, frame) {
@@ -343,12 +387,17 @@
         const referenceSpace = renderer.xr.getReferenceSpace();
         const session = renderer.xr.getSession();
         
-        // Check if controller is close to any card
+        // Check if controller is directed toward any card using raycasting
         const controllerWorldPosition = new THREE.Vector3();
         controller.getWorldPosition(controllerWorldPosition);
         
-        let closestCard = null;
-        let closestDistance = 0.3; // Max distance for hover effect
+        // Get controller's forward direction
+        const controllerDirection = new THREE.Vector3(0, 0, -1);
+        controllerDirection.applyQuaternion(controller.quaternion);
+        
+        // Create raycaster from controller position and direction
+        const raycaster = new THREE.Raycaster(controllerWorldPosition, controllerDirection, 0.1, 5.0);
+        const intersects = raycaster.intersectObjects(cards);
         
         // Reset all previously hovered cards
         cards.forEach(card => {
@@ -357,17 +406,26 @@
           }
         });
         
-        // Find the closest card to the controller
-        cards.forEach(card => {
-          const distance = controllerWorldPosition.distanceTo(card.position);
-          
-          if (distance < closestDistance) {
-            closestCard = card;
-            closestDistance = distance;
-          }
-        });
+        // MODIFIED: Use both distance and pointing direction for interaction
+        let closestCard = null;
+        let closestDistance = 0.5;
         
-        // Apply hover effect to the closest card
+        // First check for ray intersections (pointing at card)
+        if (intersects.length > 0) {
+          closestCard = intersects[0].object;
+        } 
+        // If not pointing directly at any card, check proximity as a fallback
+        else {
+          cards.forEach(card => {
+            const distance = controllerWorldPosition.distanceTo(card.position);
+            if (distance < closestDistance) {
+              closestCard = card;
+              closestDistance = distance;
+            }
+          });
+        }
+        
+        // Apply hover effect to the selected card
         if (closestCard) {
           hoverCard(closestCard, controllerWorldPosition);
         }
@@ -388,14 +446,14 @@
     function hoverCard(card, controllerPosition) {
       card.userData.hovered = true;
       
-      // Scale up the card
-      card.scale.set(1.15, 1.15, 1.15);
+      // Enhanced scale up animation for better visibility
+      card.scale.set(1.25, 1.25, 1.25);
       
-      // Move card slightly toward the user
+      // Move card more noticeably toward the user
       const direction = new THREE.Vector3().subVectors(
         new THREE.Vector3(0, 0, 0), 
         card.userData.originalPosition
-      ).normalize().multiplyScalar(0.05);
+      ).normalize().multiplyScalar(0.08);
       
       card.position.copy(card.userData.originalPosition).add(direction);
       
@@ -403,9 +461,9 @@
       const lookAtPos = controllerPosition.clone();
       card.lookAt(lookAtPos);
       
-      // Enhance material emission for glow effect
+      // Enhanced glow effect with pulsing animation
       card.material.emissive.setHex(cardData[card.userData.index].color);
-      card.material.emissiveIntensity = 0.3;
+      card.material.emissiveIntensity = 0.4 + Math.sin(clock.getElapsedTime() * 3) * 0.1;
     }
     
     function animateToOriginal(card) {
